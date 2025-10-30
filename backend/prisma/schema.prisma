@@ -1,0 +1,91 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("client")
+  status    String   @default("approved")
+  phone     String?
+  whatsapp  String?
+  avatar    String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  properties Property[]
+  agent      Agent?
+
+  @@map("users")
+}
+
+model Property {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String?
+  type        String
+  purpose     String
+  price       Int
+  areaSqft    Int?     @map("area_sqft")
+  bedrooms    Int?
+  bathrooms   Int?
+  emirate     String
+  location    String?
+  images      String?  // JSON array stored as string
+  features    String?  // JSON array stored as string
+  ownerId     Int?     @map("owner_id")
+  status      String   @default("active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  owner User?  @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  leads Lead[]
+
+  @@map("properties")
+}
+
+model Lead {
+  id         Int       @id @default(autoincrement())
+  name       String
+  email      String
+  phone      String?
+  message    String?
+  propertyId Int?      @map("property_id")
+  status     String    @default("new")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  property Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+
+  @@map("leads")
+}
+
+model Agent {
+  id             Int      @id @default(autoincrement())
+  userId         Int      @unique @map("user_id")
+  specialization String?
+  experienceYears Int?   @map("experience_years")
+  bio            String?
+  linkedinUrl    String?  @map("linkedin_url")
+  instagramUrl   String?  @map("instagram_url")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("agents")
+}
