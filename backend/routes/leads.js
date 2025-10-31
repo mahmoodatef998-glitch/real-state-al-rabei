@@ -47,6 +47,27 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Name and email are required' });
     }
 
+    // If property_id provided, validate property exists and get broker info
+    let brokerInfo = null;
+    if (property_id) {
+      const Property = require('../models/Property');
+      const property = await Property.findById(property_id);
+      if (!property) {
+        return res.status(404).json({ error: 'Property not found' });
+      }
+      
+      // Get broker (owner) info if property has an owner
+      if (property.owner && (property.owner.role === 'broker' || property.owner.role === 'admin')) {
+        brokerInfo = {
+          id: property.owner.id,
+          name: property.owner.name,
+          phone: property.owner.phone,
+          whatsapp: property.owner.whatsapp,
+          email: property.owner.email
+        };
+      }
+    }
+
     const leadData = {
       name,
       email,

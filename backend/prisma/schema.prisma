@@ -26,6 +26,7 @@ model User {
   // Relations
   properties Property[]
   agent      Agent?
+  deals      Deal[]    // Deals created by this broker
 
   @@map("users")
 }
@@ -52,6 +53,7 @@ model Property {
   // Relations
   owner User?  @relation(fields: [ownerId], references: [id], onDelete: SetNull)
   leads Lead[]
+  deals Deal[]  // Deals associated with this property
 
   @@map("properties")
 }
@@ -88,4 +90,41 @@ model Agent {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("agents")
+}
+
+model Company {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  email     String?
+  phone     String?
+  address   String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  deals Deal[]
+
+  @@map("companies")
+}
+
+model Deal {
+  id             Int       @id @default(autoincrement())
+  propertyId     Int       @map("property_id")
+  brokerId       Int       @map("broker_id")
+  companyId      Int       @map("company_id")
+  clientName     String    @map("client_name")
+  salePrice      Float     @map("sale_price")
+  commissionRate Float     @map("commission_rate")
+  brokerShare    Float     @map("broker_share")
+  companyShare   Float     @map("company_share")
+  status         String    @default("completed")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  broker   User     @relation(fields: [brokerId], references: [id], onDelete: Cascade)
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("deals")
 }

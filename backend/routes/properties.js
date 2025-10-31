@@ -26,7 +26,9 @@ router.get('/new-arrivals/:limit?', async (req, res) => {
   try {
     const limit = req.params.limit ? parseInt(req.params.limit) : 6;
     const properties = await Property.getAll({ limit, sort: 'newest' });
-    res.json({ properties });
+    // Ensure owner info is included in response
+    const propertiesData = properties.map(p => p.toJSON ? p.toJSON() : p);
+    res.json({ properties: propertiesData });
   } catch (error) {
     console.error('Get new arrivals error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -48,7 +50,9 @@ router.get('/', async (req, res) => {
     };
 
     const properties = await Property.getAll(filters);
-    res.json({ properties });
+    // Ensure owner info is included in response
+    const propertiesData = properties.map(p => p.toJSON ? p.toJSON() : p);
+    res.json({ properties: propertiesData });
   } catch (error) {
     console.error('Get properties error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -64,7 +68,10 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Property not found' });
     }
 
-    res.json({ property });
+    // Ensure owner info is included in response
+    const propertyData = property.toJSON ? property.toJSON() : property;
+    
+    res.json({ property: propertyData });
   } catch (error) {
     console.error('Get property error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -114,8 +121,8 @@ router.post('/', authenticateToken, requireRole(['admin', 'broker']), upload.arr
   }
 });
 
-// Update property
-router.put('/:id', authenticateToken, validateProperty, handleValidationErrors, async (req, res, next) => {
+// Update property (with optional image upload)
+router.put('/:id', authenticateToken, requireRole(['admin', 'broker']), upload.array('images', 100), async (req, res, next) => {
   try {
     const property = await Property.findById(req.params.id);
     
@@ -134,10 +141,47 @@ router.put('/:id', authenticateToken, validateProperty, handleValidationErrors, 
       });
     }
 
+    const files = req.files || [];
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    
     const {
       title, description, type, purpose, price, area_sqft,
-      bedrooms, bathrooms, emirate, location, images, features, status
+      bedrooms, bathrooms, emirate, location, features, status,
+      existingImages
     } = req.body;
+
+    // If JSON string, parse features
+    let parsedFeatures = features;
+    if (typeof features === 'string') {
+      try { parsedFeatures = JSON.parse(features); } catch { parsedFeatures = features.split(',').map(f => f.trim()).filter(Boolean); }
+    }
+
+    // Handle images: combine existing and new
+    let images = property.images || [];
+    
+    // Parse existingImages if provided (can be string or array)
+    let existingImageArray = [];
+    if (existingImages) {
+      if (typeof existingImages === 'string') {
+        try {
+          existingImageArray = JSON.parse(existingImages);
+        } catch {
+          existingImageArray = Array.isArray(existingImages) ? existingImages : [existingImages];
+        }
+      } else if (Array.isArray(existingImages)) {
+        existingImageArray = existingImages;
+      }
+    }
+    
+    // If new files uploaded, add them
+    if (files.length > 0) {
+      const newImageUrls = files.map(file => `${baseUrl}/uploads/${file.filename}`);
+      images = [...existingImageArray, ...newImageUrls];
+    } else if (existingImageArray.length > 0) {
+      // Only update existing images if provided
+      images = existingImageArray;
+    }
+    // Otherwise keep current images
 
     const updateData = {};
     if (title) updateData.title = title;
@@ -149,17 +193,19 @@ router.put('/:id', authenticateToken, validateProperty, handleValidationErrors, 
     if (bedrooms) updateData.bedrooms = parseInt(bedrooms);
     if (bathrooms) updateData.bathrooms = parseInt(bathrooms);
     if (emirate) updateData.emirate = emirate;
-    if (location) updateData.location = location;
+    if (location !== undefined) updateData.location = location;
     if (images) updateData.images = images;
-    if (features) updateData.features = features;
+    if (parsedFeatures) updateData.features = parsedFeatures;
     if (status && req.user.role === 'admin') updateData.status = status;
 
     await property.update(updateData);
 
+    const updatedProperty = await Property.findById(req.params.id);
+
     res.json({
       success: true,
       message: 'Property updated successfully',
-      property
+      property: updatedProperty
     });
   } catch (error) {
     console.error('Update property error:', error);

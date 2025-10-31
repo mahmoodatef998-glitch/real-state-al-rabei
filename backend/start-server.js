@@ -71,8 +71,7 @@ if (process.env.JWT_SECRET) {
   console.log('✅ JWT_SECRET set as global variable');
 }
 
-// const { initDB } = require('./database/db');
-// const { addSampleProperties } = require('./scripts/add-sample-properties');
+// Database is handled by Prisma (PostgreSQL)
 const authRoutes = require('./routes/auth');
 const propertiesRoutes = require('./routes/properties');
 const usersRoutes = require('./routes/users');
@@ -80,12 +79,15 @@ const leadsRoutes = require('./routes/leads');
 const { errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
-const PORT = process.env.PORT || 3003;
+const PORT = process.env.PORT || 3050;
 
 console.log('🚀 Starting Alrabie Real Estate Backend...');
 
-// Security middleware
-app.use(helmet());
+// Security middleware - configure helmet to allow cross-origin for images
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginEmbedderPolicy: false
+}));
 
 // Rate limiting
 const limiter = rateLimit({
@@ -104,8 +106,7 @@ app.use(cors({
       'http://localhost:3000',
       'http://localhost:3001',
       'http://localhost:3002',
-      'http://localhost:3003',
-      'http://localhost:3004'
+      'http://localhost:3003'
     ];
 
     if (process.env.NODE_ENV === 'production') {
@@ -152,10 +153,26 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Static files for uploads and assets
+// Static files for uploads and assets - with CORS
+app.use('/uploads', (req, res, next) => {
+  // Set CORS headers for all requests to /uploads
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Expose-Headers', 'Content-Type');
+  
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
-  setHeaders: (res) => {
+  setHeaders: (res, filePath) => {
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    // Additional CORS headers (in case they're needed)
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   }
 }));
 app.use('/public', express.static('public'));
@@ -176,6 +193,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/properties', propertiesRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/leads', leadsRoutes);
+app.use('/api/deals', require('./routes/deals'));
 
 // Default images endpoint for properties without images
 app.get('/api/images/default/:type', (req, res) => {
@@ -233,7 +251,7 @@ const startServer = async () => {
     const server = app.listen(PORT, () => {
       console.log('✅ Server started successfully!');
       console.log(`🌐 Server running on port ${PORT}`);
-      console.log(`📱 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
+      console.log(`📱 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3001'}`);
       console.log(`🔗 API URL: http://localhost:${PORT}`);
       console.log(`🌐 Health Check: http://localhost:${PORT}/api/health`);
       console.log('📋 Available endpoints:');

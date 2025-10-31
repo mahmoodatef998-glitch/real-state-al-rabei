@@ -23,6 +23,13 @@ exports.validateRegister = [
   
   body('phone')
     .optional()
+    .custom((value, { req }) => {
+      // Phone is required for brokers
+      if (req.body.role === 'broker' && !value) {
+        throw new Error('Phone number is required for brokers');
+      }
+      return true;
+    })
     .isLength({ max: 20 }).withMessage('Phone number is too long'),
   
   body('whatsapp')

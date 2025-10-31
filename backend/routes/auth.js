@@ -140,6 +140,14 @@ router.post('/register', validateRegister, handleValidationErrors, async (req, r
     const userRole = role || 'client';
     const userStatus = userRole === 'broker' ? 'pending' : 'approved';
 
+    // Validate phone for brokers
+    if (userRole === 'broker' && !phone) {
+      return res.status(400).json({
+        success: false,
+        error: 'Phone number is required for broker registration'
+      });
+    }
+
     console.log(`📝 Registration attempt: ${name} (${email}) as ${userRole} - Status: ${userStatus}`);
 
     // Create user

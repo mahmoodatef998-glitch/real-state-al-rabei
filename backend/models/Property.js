@@ -23,6 +23,8 @@ class Property {
     this.status = data.status || 'active';
     this.created_at = data.created_at || data.createdAt;
     this.updated_at = data.updated_at || data.updatedAt;
+    // Include owner info if available (from Prisma include)
+    this.owner = data.owner || null;
   }
 }
 
@@ -53,12 +55,38 @@ Property.create = async function(propertyData) {
       ownerId: propertyData.owner_id != null ? Number(propertyData.owner_id) : null,
       status: 'active',
     },
+    include: {
+      owner: {
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          whatsapp: true,
+          email: true,
+          role: true
+        }
+      }
+    }
   });
   return new Property(created);
 };
 
 Property.findById = async function(id) {
-  const row = await prisma.property.findUnique({ where: { id: Number(id) } });
+  const row = await prisma.property.findUnique({ 
+    where: { id: Number(id) },
+    include: {
+      owner: {
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          whatsapp: true,
+          email: true,
+          role: true
+        }
+      }
+    }
+  });
   return row ? new Property(row) : null;
 };
 
@@ -90,6 +118,18 @@ Property.getAll = async function(filters = {}) {
     where,
     orderBy,
     take: filters.limit ? Number(filters.limit) : undefined,
+    include: {
+      owner: {
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          whatsapp: true,
+          email: true,
+          role: true
+        }
+      }
+    }
   });
   return rows.map(r => new Property(r));
 };
@@ -98,6 +138,18 @@ Property.getByOwner = async function(ownerId) {
   const rows = await prisma.property.findMany({
     where: { ownerId: Number(ownerId) },
     orderBy: { createdAt: 'desc' },
+    include: {
+      owner: {
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          whatsapp: true,
+          email: true,
+          role: true
+        }
+      }
+    }
   });
   return rows.map(r => new Property(r));
 };
@@ -121,6 +173,18 @@ Property.prototype.update = async function(updateData) {
       status: updateData.status !== undefined ? updateData.status : undefined,
       ownerId: updateData.owner_id !== undefined ? Number(updateData.owner_id) : undefined,
     },
+    include: {
+      owner: {
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          whatsapp: true,
+          email: true,
+          role: true
+        }
+      }
+    }
   });
   Object.assign(this, new Property(updated));
   return this;
@@ -140,6 +204,7 @@ Property.prototype.toJSON = function() {
     ...this,
     images: this.images,
     features: this.features,
+    owner: this.owner || null, // Include owner info if available
   };
 };
 

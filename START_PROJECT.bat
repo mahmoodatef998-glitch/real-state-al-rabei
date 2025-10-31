@@ -28,10 +28,11 @@ echo Project started successfully!
 echo ========================================
 echo.
 echo Backend:  http://localhost:3050/api
-echo Frontend: http://localhost:3000 (or auto 3001 if 3000 busy)
+echo Frontend: http://localhost:3001 (or auto 3000 if 3001 busy)
 echo Prisma Studio: http://localhost:5555
-
+echo.
 echo Note: Frontend started with NEXT_PUBLIC_API_URL=http://localhost:3050/api
+echo Note: If Frontend doesn't start on 3001, it will automatically use 3000
 
 echo.
 pause
