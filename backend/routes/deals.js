@@ -169,7 +169,6 @@ router.post('/', authenticateToken, requireRole(['admin', 'broker']), async (req
     }
 
     // Validate broker exists and has correct role
-    const { prisma } = require('../database/db');
     const broker = await prisma.user.findUnique({
       where: { id: parseInt(brokerId) }
     });
