@@ -6,11 +6,12 @@ yarn-error.log
 # Environment
 .env
 
-# Prisma
+# Prisma DB (local dev only)
 prisma/dev.db
 prisma/dev.db-journal
 
-# Build
+# Build output
+.next/
 dist/
 build/
 

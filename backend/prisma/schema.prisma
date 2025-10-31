@@ -20,13 +20,16 @@ model User {
   phone     String?
   whatsapp  String?
   avatar    String?
+  companyId Int?     @map("company_id") // Multi-tenant support
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
+  company    Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
   properties Property[]
   agent      Agent?
-  deals      Deal[]    // Deals created by this broker
+  deals      Deal[]         @relation("BrokerDeals") // Deals created by this broker
+  clientDeals Deal[]         @relation("ClientDeals") // Deals where this user is the client
 
   @@map("users")
 }
@@ -46,14 +49,16 @@ model Property {
   images      String?  // JSON array stored as string
   features    String?  // JSON array stored as string
   ownerId     Int?     @map("owner_id")
+  companyId   Int?     @map("company_id") // Multi-tenant support
   status      String   @default("active")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   // Relations
-  owner User?  @relation(fields: [ownerId], references: [id], onDelete: SetNull)
-  leads Lead[]
-  deals Deal[]  // Deals associated with this property
+  owner   User?    @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  company Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  leads   Lead[]
+  deals   Deal[]  // Deals associated with this property
 
   @@map("properties")
 }
@@ -65,12 +70,14 @@ model Lead {
   phone      String?
   message    String?
   propertyId Int?      @map("property_id")
+  companyId  Int?      @map("company_id") // Multi-tenant support
   status     String    @default("new")
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
 
   // Relations
   property Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  company  Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
   @@map("leads")
 }
@@ -102,29 +109,38 @@ model Company {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  deals Deal[]
+  users     User[]
+  properties Property[]
+  leads     Lead[]
+  deals     Deal[]
 
   @@map("companies")
 }
 
 model Deal {
-  id             Int       @id @default(autoincrement())
-  propertyId     Int       @map("property_id")
-  brokerId       Int       @map("broker_id")
-  companyId      Int       @map("company_id")
-  clientName     String    @map("client_name")
-  salePrice      Float     @map("sale_price")
-  commissionRate Float     @map("commission_rate")
-  brokerShare    Float     @map("broker_share")
-  companyShare   Float     @map("company_share")
-  status         String    @default("completed")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
+  id                Int       @id @default(autoincrement())
+  propertyId        Int       @map("property_id")
+  brokerId          Int       @map("broker_id")
+  companyId         Int       @map("company_id")
+  clientId          Int?      @map("client_id") // Optional: link to User (client)
+  clientName        String    @map("client_name")
+  dealType          String    @default("sale") @map("deal_type") // sale or rent
+  dealValue         Float     @map("deal_value") // Main deal value (same as salePrice for backward compatibility)
+  salePrice         Float?    @map("sale_price") // Keep for backward compatibility (will sync with dealValue)
+  commissionRate    Float     @map("commission_rate")
+  commissionValue   Float     @map("commission_value") // Total commission (auto-calculated: dealValue * commissionRate)
+  brokerShare       Float     @map("broker_share") // 70% of commission
+  companyShare      Float     @map("company_share") // 30% of commission
+  dateClosed        DateTime? @map("date_closed") // When deal was closed
+  status            String    @default("open") // open, closed, cancelled
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
   // Relations
   property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  broker   User     @relation(fields: [brokerId], references: [id], onDelete: Cascade)
+  broker   User     @relation("BrokerDeals", fields: [brokerId], references: [id], onDelete: Cascade)
   company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  client   User?    @relation("ClientDeals", fields: [clientId], references: [id], onDelete: SetNull)
 
   @@map("deals")
 }

@@ -194,6 +194,7 @@ app.use('/api/properties', propertiesRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/leads', leadsRoutes);
 app.use('/api/deals', require('./routes/deals'));
+app.use('/api/companies', require('./routes/companies'));
 
 // Default images endpoint for properties without images
 app.get('/api/images/default/:type', (req, res) => {

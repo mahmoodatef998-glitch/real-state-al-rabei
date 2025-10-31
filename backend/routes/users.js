@@ -4,10 +4,25 @@ const { authenticateToken, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Get all users (admin only)
-router.get('/', authenticateToken, requireRole(['admin']), async (req, res) => {
+// Get all users (admin only) or filtered by role
+router.get('/', authenticateToken, async (req, res) => {
   try {
-    const users = await User.getAll();
+    const { role } = req.query;
+    
+    // Only admins can see all users
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied. Admin only.' });
+    }
+
+    let users;
+    if (role) {
+      // Filter by role
+      const allUsers = await User.getAll();
+      users = allUsers.filter(user => user.role === role);
+    } else {
+      users = await User.getAll();
+    }
+    
     res.json({ users: users.map(user => user.toJSON()) });
   } catch (error) {
     console.error('Get users error:', error);

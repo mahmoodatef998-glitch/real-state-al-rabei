@@ -3,15 +3,20 @@ const Deal = require('../models/Deal');
 const Property = require('../models/Property');
 const Company = require('../models/Company');
 const { authenticateToken, requireRole } = require('../middleware/auth');
+const { prisma } = require('../database/db');
 
 const router = express.Router();
 
-// Get all deals (admin only) or filtered by brokerId/companyId
+// Get all deals (admin only) or filtered by brokerId/companyId/clientId
 router.get('/', authenticateToken, async (req, res, next) => {
   try {
-    const { brokerId, companyId } = req.query;
+    const { brokerId, companyId, clientId, status, company_id } = req.query;
     
-    // If user is not admin, they can only see their own deals (if broker)
+    // Multi-tenant: Get company_id from user if available
+    const userCompanyId = req.user.company_id || req.user.companyId;
+    const filterCompanyId = companyId || company_id || (userCompanyId && req.user.role !== 'admin' ? userCompanyId : null);
+    
+    // If user is not admin, they can only see their own deals (if broker) or deals from their company
     if (req.user.role !== 'admin' && req.user.role !== 'broker') {
       return res.status(403).json({ 
         success: false,
@@ -32,27 +37,32 @@ router.get('/', authenticateToken, async (req, res, next) => {
       }
 
       deals = await Deal.findByBroker(brokerId);
-      totals = await Deal.getTotals(parseInt(brokerId), null);
-    } else if (companyId) {
-      // Only admins can filter by company
-      if (req.user.role !== 'admin') {
+      totals = await Deal.getTotals(parseInt(brokerId), filterCompanyId, status || null);
+    } else if (clientId) {
+      // Find deals by client
+      deals = await Deal.findByClient(clientId);
+      totals = await Deal.getTotals(null, filterCompanyId, status || null);
+    } else if (filterCompanyId) {
+      // Filter by company (with multi-tenant support)
+      if (req.user.role !== 'admin' && userCompanyId && parseInt(filterCompanyId) !== userCompanyId) {
         return res.status(403).json({ 
           success: false,
-          error: 'Access denied. Only admins can filter by company.' 
+          error: 'Access denied. You can only view deals from your company.' 
         });
       }
 
-      deals = await Deal.findByCompany(companyId);
-      totals = await Deal.getTotals(null, parseInt(companyId));
+      deals = await Deal.findByCompany(filterCompanyId);
+      totals = await Deal.getTotals(null, parseInt(filterCompanyId), status || null);
     } else {
-      // Get all deals (admin only)
+      // Get all deals (admin only) or filtered by user's company
       if (req.user.role !== 'admin') {
         // For brokers, return only their deals
         deals = await Deal.findByBroker(req.user.id);
-        totals = await Deal.getTotals(req.user.id, null);
+        totals = await Deal.getTotals(req.user.id, userCompanyId, status || null);
       } else {
-        deals = await Deal.getAll();
-        totals = await Deal.getTotals();
+        // Admin can see all deals or filter by company_id
+        deals = await Deal.getAll({ companyId: filterCompanyId });
+        totals = await Deal.getTotals(null, filterCompanyId, status || null);
       }
     }
 
@@ -87,6 +97,15 @@ router.get('/:id', authenticateToken, async (req, res, next) => {
       });
     }
 
+    // Multi-tenant: Ensure user can only see deals from their company
+    const userCompanyId = req.user.company_id || req.user.companyId;
+    if (userCompanyId && deal.company_id && parseInt(deal.company_id) !== userCompanyId && req.user.role !== 'admin') {
+      return res.status(403).json({ 
+        success: false,
+        error: 'Access denied. You can only view deals from your company.' 
+      });
+    }
+
     res.json({
       success: true,
       deal
@@ -104,16 +123,39 @@ router.post('/', authenticateToken, requireRole(['admin', 'broker']), async (req
       propertyId,
       brokerId,
       companyId,
+      clientId, // Optional
       clientName,
-      salePrice,
-      commissionRate
+      dealType = 'sale', // sale or rent
+      dealValue, // New primary field
+      salePrice, // Backward compatibility
+      commissionRate,
+      status = 'open'
     } = req.body;
 
+    // Use dealValue if provided, otherwise use salePrice (backward compatibility)
+    const finalDealValue = dealValue || salePrice;
+
     // Validation
-    if (!propertyId || !brokerId || !companyId || !clientName || !salePrice || !commissionRate) {
+    if (!propertyId || !brokerId || !companyId || !clientName || !finalDealValue || !commissionRate) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: propertyId, brokerId, companyId, clientName, salePrice, commissionRate'
+        error: 'Missing required fields: propertyId, brokerId, companyId, clientName, dealValue (or salePrice), commissionRate'
+      });
+    }
+
+    // Validate dealType
+    if (dealType && !['sale', 'rent'].includes(dealType)) {
+      return res.status(400).json({
+        success: false,
+        error: 'dealType must be either "sale" or "rent"'
+      });
+    }
+
+    // Validate status
+    if (status && !['open', 'closed', 'cancelled'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        error: 'status must be one of: "open", "closed", "cancelled"'
       });
     }
 
@@ -163,11 +205,27 @@ router.post('/', authenticateToken, requireRole(['admin', 'broker']), async (req
       });
     }
 
-    // Validate sale price
-    if (salePrice <= 0) {
+    // Validate deal value
+    if (finalDealValue <= 0) {
       return res.status(400).json({
         success: false,
-        error: 'Sale price must be greater than 0'
+        error: 'Deal value must be greater than 0'
+      });
+    }
+
+    // Multi-tenant: Auto-set companyId from user if not provided (for brokers)
+    let finalCompanyId = companyId;
+    if (!finalCompanyId && req.user.company_id) {
+      finalCompanyId = req.user.company_id;
+    } else if (!finalCompanyId && req.user.companyId) {
+      finalCompanyId = req.user.companyId;
+    }
+    
+    // For brokers, ensure companyId matches their company
+    if (req.user.role === 'broker' && req.user.company_id && finalCompanyId && parseInt(finalCompanyId) !== req.user.company_id) {
+      return res.status(403).json({
+        success: false,
+        error: 'Brokers can only create deals for their own company'
       });
     }
 
@@ -179,14 +237,18 @@ router.post('/', authenticateToken, requireRole(['admin', 'broker']), async (req
       });
     }
 
-    // Create deal (shares are calculated automatically in Deal.create)
+    // Create deal (commission and shares are calculated automatically in Deal.create)
     const deal = await Deal.create({
       propertyId: parseInt(propertyId),
       brokerId: parseInt(brokerId),
-      companyId: parseInt(companyId),
+      companyId: parseInt(finalCompanyId),
+      clientId: clientId ? parseInt(clientId) : null,
       clientName,
-      salePrice: parseFloat(salePrice),
-      commissionRate: parseFloat(commissionRate)
+      dealType,
+      dealValue: parseFloat(finalDealValue),
+      salePrice: parseFloat(finalDealValue), // Sync for backward compatibility
+      commissionRate: parseFloat(commissionRate),
+      status
     });
 
     res.status(201).json({
@@ -216,32 +278,62 @@ router.put('/:id', authenticateToken, async (req, res, next) => {
     if (req.user.role !== 'admin' && deal.broker_id !== req.user.id) {
       return res.status(403).json({
         success: false,
-        error: 'Access denied'
+        error: 'Access denied. You can only update your own deals.'
+      });
+    }
+
+    // Multi-tenant: Ensure user can only update deals from their company
+    const userCompanyId = req.user.company_id || req.user.companyId;
+    if (userCompanyId && deal.company_id && parseInt(deal.company_id) !== userCompanyId && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied. You can only update deals from your company.'
       });
     }
 
     const {
       clientName,
-      salePrice,
+      clientId,
+      dealType,
+      dealValue,
+      salePrice, // Backward compatibility
       commissionRate,
-      status
+      status,
+      dateClosed
     } = req.body;
 
     const updateData = {};
 
     if (clientName !== undefined) updateData.clientName = clientName;
-    if (status !== undefined && req.user.role === 'admin') updateData.status = status;
+    if (clientId !== undefined) updateData.clientId = clientId ? parseInt(clientId) : null;
+    if (dealType !== undefined && ['sale', 'rent'].includes(dealType)) updateData.dealType = dealType;
+    
+    // Status update: admin can change any status, broker can only change their own deals
+    if (status !== undefined && ['open', 'closed', 'cancelled'].includes(status)) {
+      if (req.user.role === 'admin' || deal.broker_id === req.user.id) {
+        updateData.status = status;
+      }
+    }
 
-    // If salePrice or commissionRate changed, recalculate shares
-    if (salePrice !== undefined || commissionRate !== undefined) {
-      const finalSalePrice = salePrice !== undefined ? parseFloat(salePrice) : deal.sale_price;
-      const finalCommissionRate = commissionRate !== undefined ? parseFloat(commissionRate) : deal.commission_rate;
+    // Date closed can be set by admin when closing deal
+    if (dateClosed !== undefined && req.user.role === 'admin') {
+      updateData.dateClosed = dateClosed ? new Date(dateClosed) : null;
+    }
 
-      const brokerRate = 0.7; // 70% broker, 30% company
-      updateData.salePrice = finalSalePrice;
-      updateData.commissionRate = finalCommissionRate;
-      updateData.brokerShare = finalSalePrice * finalCommissionRate * brokerRate;
-      updateData.companyShare = finalSalePrice * finalCommissionRate * (1 - brokerRate);
+    // If dealValue/salePrice or commissionRate changed, recalculate commission and shares
+    const finalDealValue = dealValue !== undefined 
+      ? parseFloat(dealValue) 
+      : (salePrice !== undefined ? parseFloat(salePrice) : null);
+    
+    if (finalDealValue !== null || commissionRate !== undefined) {
+      const existingDeal = await prisma.deal.findUnique({ where: { id: parseInt(req.params.id) } });
+      const calculatedDealValue = finalDealValue !== null ? finalDealValue : existingDeal.dealValue || existingDeal.salePrice;
+      const calculatedCommissionRate = commissionRate !== undefined ? parseFloat(commissionRate) : existingDeal.commissionRate;
+
+      updateData.dealValue = calculatedDealValue;
+      updateData.salePrice = calculatedDealValue; // Sync for backward compatibility
+      updateData.commissionRate = calculatedCommissionRate;
+      // commissionValue, brokerShare, companyShare will be recalculated in Deal.update()
     }
 
     await deal.update(updateData);
