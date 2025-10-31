@@ -97,8 +97,20 @@ const limiter = rateLimit({
 app.use(limiter);
 
 // CORS configuration - Enhanced for development and strict in production
+// Handle OPTIONS requests first (before CORS middleware)
+app.options('*', (req, res) => {
+  const origin = req.headers.origin;
+  res.header('Access-Control-Allow-Origin', origin || '*');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control');
+  res.header('Access-Control-Max-Age', '86400');
+  res.sendStatus(200);
+});
+
 app.use(cors({
   origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, Postman, etc.)
     if (!origin) return callback(null, true);
 
     const frontendUrl = process.env.FRONTEND_URL ? process.env.FRONTEND_URL.trim().replace(/\/$/, '') : null;
@@ -106,47 +118,61 @@ app.use(cors({
       'http://localhost:3000',
       'http://localhost:3001',
       'http://localhost:3002',
-      'http://localhost:3003'
+      'http://localhost:3003',
+      'http://127.0.0.1:3000',
+      'http://127.0.0.1:3001'
     ];
 
+    // In production, only allow frontendUrl
     if (process.env.NODE_ENV === 'production') {
-      if (frontendUrl && origin.startsWith(frontendUrl)) return callback(null, true);
-      console.log('CORS blocked (prod):', origin);
+      if (frontendUrl && origin.startsWith(frontendUrl)) {
+        return callback(null, true);
+      }
+      console.log('❌ CORS blocked (prod):', origin);
       return callback(new Error('Not allowed by CORS'));
     }
 
+    // In development, allow dev origins or frontendUrl
     if (devAllowed.includes(origin) || (frontendUrl && origin.startsWith(frontendUrl))) {
+      console.log('✅ CORS allowed:', origin);
       return callback(null, true);
     }
-    console.log('CORS blocked (dev):', origin);
-    return callback(null, true); // relax in development
+    
+    // Relax in development - allow all origins
+    console.log('⚠️  CORS allowed (dev mode):', origin);
+    return callback(null, true);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin', 'Cache-Control'],
+  exposedHeaders: ['Content-Type', 'Authorization'],
   optionsSuccessStatus: 200,
   preflightContinue: false
 }));
 
-// Additional CORS middleware for all routes
+// Additional CORS middleware for all routes (fallback)
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   
-  // Set CORS headers
-  res.header('Access-Control-Allow-Origin', origin || '*');
-  res.header('Access-Control-Allow-Credentials', 'true');
+  // Set CORS headers for all responses
+  if (origin) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+  } else {
+    res.header('Access-Control-Allow-Origin', '*');
+  }
+  
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control');
-  res.header('Access-Control-Max-Age', '86400'); // 24 hours
+  res.header('Access-Control-Max-Age', '86400');
   
-  // Log CORS requests for debugging
+  // Handle OPTIONS requests
   if (req.method === 'OPTIONS') {
-    console.log('CORS preflight request from:', origin);
-    res.sendStatus(200);
-  } else {
-    console.log(`${req.method} ${req.path} from:`, origin);
-    next();
+    console.log('✅ CORS preflight OPTIONS:', req.path, 'from:', origin);
+    return res.sendStatus(200);
   }
+  
+  next();
 });
 
 // Body parsing middleware
