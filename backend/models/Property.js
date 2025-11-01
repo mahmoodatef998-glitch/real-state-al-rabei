@@ -91,7 +91,22 @@ Property.findById = async function(id) {
 };
 
 Property.getAll = async function(filters = {}) {
-  const where = { status: 'active' };
+  const where = {};
+  
+  // Handle status filtering
+  if (filters.status) {
+    // Support multiple statuses separated by comma (e.g., "active,available")
+    const statuses = filters.status.split(',').map(s => s.trim());
+    if (statuses.length === 1) {
+      where.status = statuses[0];
+    } else if (statuses.length > 1) {
+      where.status = { in: statuses };
+    }
+  } else {
+    // Default: only show active properties for public listings
+    where.status = 'active';
+  }
+  
   if (filters.type && filters.type !== 'all') where.type = filters.type;
   if (filters.purpose && filters.purpose !== 'all') where.purpose = filters.purpose;
   if (filters.emirate && filters.emirate !== 'all') where.emirate = filters.emirate;

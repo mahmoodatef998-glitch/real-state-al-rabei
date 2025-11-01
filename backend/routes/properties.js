@@ -25,7 +25,12 @@ const router = express.Router();
 router.get('/new-arrivals/:limit?', async (req, res) => {
   try {
     const limit = req.params.limit ? parseInt(req.params.limit) : 6;
-    const properties = await Property.getAll({ limit, sort: 'newest' });
+    // Only show active properties in new arrivals
+    const properties = await Property.getAll({ 
+      limit, 
+      sort: 'newest',
+      status: 'active'
+    });
     // Ensure owner info is included in response
     const propertiesData = properties.map(p => p.toJSON ? p.toJSON() : p);
     res.json({ properties: propertiesData });
@@ -44,6 +49,7 @@ router.get('/', async (req, res) => {
       emirate: req.query.emirate,
       price_min: req.query.price_min ? parseInt(req.query.price_min) : undefined,
       price_max: req.query.price_max ? parseInt(req.query.price_max) : undefined,
+      status: req.query.status, // Support status filtering (e.g., "active,available")
       search: req.query.search,
       sort: req.query.sort,
       limit: req.query.limit ? parseInt(req.query.limit) : undefined
@@ -196,7 +202,14 @@ router.put('/:id', authenticateToken, requireRole(['admin', 'broker']), upload.a
     if (location !== undefined) updateData.location = location;
     if (images) updateData.images = images;
     if (parsedFeatures) updateData.features = parsedFeatures;
-    if (status && req.user.role === 'admin') updateData.status = status;
+    // Allow both admin and property owner (broker) to update status
+    if (status) {
+      // Validate status value
+      const validStatuses = ['active', 'closed', 'sold', 'rented'];
+      if (validStatuses.includes(status)) {
+        updateData.status = status;
+      }
+    }
 
     await property.update(updateData);
 

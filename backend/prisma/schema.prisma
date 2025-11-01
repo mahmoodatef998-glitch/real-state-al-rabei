@@ -30,6 +30,7 @@ model User {
   agent      Agent?
   deals      Deal[]         @relation("BrokerDeals") // Deals created by this broker
   clientDeals Deal[]         @relation("ClientDeals") // Deals where this user is the client
+  leads      Lead[]         @relation("BrokerLeads") // Leads assigned to this broker
 
   @@map("users")
 }
@@ -65,18 +66,20 @@ model Property {
 
 model Lead {
   id         Int       @id @default(autoincrement())
-  name       String
-  email      String
-  phone      String?
+  name       String    @map("lead_name")
+  email      String    @default("")
+  phone      String    @map("lead_phone")
   message    String?
   propertyId Int?      @map("property_id")
+  brokerId   Int?      @map("broker_id") // Broker who listed the property
   companyId  Int?      @map("company_id") // Multi-tenant support
-  status     String    @default("new")
+  status     String    @default("new") // new, contacted, negotiating, closed
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
 
   // Relations
   property Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  broker   User?     @relation("BrokerLeads", fields: [brokerId], references: [id], onDelete: SetNull)
   company  Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
   @@map("leads")

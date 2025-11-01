@@ -1,77 +1,73 @@
-# 🚀 خطوات التنفيذ السريعة
+# 🚀 Quick Start Guide
 
-## ✅ الخطوة 1: تشغيل Migration
+## Choose Your Launcher
 
-### اختر واحدة من الطريقتين:
-
-#### الطريقة 1: استخدام Batch File (أسهل)
-```powershell
-# في المجلد الرئيسي للمشروع
-.\MIGRATION_COMMANDS.bat
+### 🎯 For Daily Work
 ```
-
-#### الطريقة 2: تشغيل الأوامر يدوياً
-```powershell
-cd backend
-npx prisma migrate dev --name enhance_deals_and_multi_tenant
-npm run prisma:generate
+Double-click: START_PROJECT.bat
 ```
+✅ Starts Backend + Frontend + Opens Browser  
+✅ Everything in one click!
 
 ---
 
-## ✅ الخطوة 2: التحقق من Migration
-
-### افتح Prisma Studio للتحقق:
-```powershell
-cd backend
-npm run prisma:studio
+### 🗄️ For Database Management
 ```
-
-**تحقق من:**
-- ✅ Deal table يحتوي على الحقول الجديدة
-- ✅ User, Property, Lead tables تحتوي على `companyId`
+Double-click: PRISMA_STUDIO.bat
+```
+✅ Opens Prisma Studio  
+✅ View/Edit database tables
 
 ---
 
-## ✅ الخطوة 3: اختبار Backend
+## 📋 What's Changed (Nov 1, 2025)
 
-### شغّل Backend Server:
-```powershell
-cd backend
-npm run dev
-```
+### ✅ NEW: Separated Prisma Studio
+- Prisma Studio is now **independent**
+- Faster project startup
+- Launch database tools only when needed
 
-### اختبر API (استخدم Postman أو curl):
-```http
-POST http://localhost:3050/api/deals
-Authorization: Bearer YOUR_TOKEN
-Content-Type: application/json
-
-{
-  "propertyId": 1,
-  "brokerId": 2,
-  "companyId": 1,
-  "clientName": "Test Client",
-  "dealType": "sale",
-  "dealValue": 500000,
-  "commissionRate": 0.05,
-  "status": "open"
-}
-```
+### ✅ IMPROVED: Auto Browser Launch
+- `START_PROJECT.bat` now opens browser automatically
+- No need to manually navigate to localhost:3000
 
 ---
 
-## ✅ الخطوة 4: المتابعة مع Frontend
+## 📁 All Startup Files
 
-بعد التأكد من أن Backend يعمل، سنقوم بـ:
-1. إنشاء Deal Forms في Dashboard
-2. إضافة Deals Tab
-3. إضافة Reporting Tables
-4. تحسين UX
+| File | Purpose | Opens Browser |
+|------|---------|---------------|
+| `START_PROJECT.bat` | Full project (Backend + Frontend) | ✅ Yes |
+| `PRISMA_STUDIO.bat` | Database management only | ❌ No |
+| `backend/start.bat` | Backend server only | ❌ No |
+| `frontend-next/start.bat` | Frontend only | ❌ No |
 
 ---
 
-## ⚠️ إذا واجهت مشكلة:
+## 🔗 After Starting
 
-راجع `MIGRATION_STEPS_AR.md` للحلول.
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost:3000 |
+| Backend | http://localhost:3050/api |
+| Prisma Studio | http://localhost:5555 |
 
+---
+
+## 📚 Full Documentation
+
+- **Arabic Guide**: `STARTUP_GUIDE_AR.md` 🇦🇪
+- **English Guide**: `STARTUP_GUIDE_EN.md` 🇬🇧
+- **Leads System**: `LEADS_GUIDE_ARABIC.md` 📊
+
+---
+
+## ⚡ Quick Tips
+
+1. **First Time?** Run `START_PROJECT.bat`
+2. **Need Database?** Also run `PRISMA_STUDIO.bat`
+3. **Problems?** Close all windows and restart
+
+---
+
+**That's it! Start coding! 💻**
